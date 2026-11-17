@@ -1,4 +1,4 @@
-﻿<#
+<#
   云栖盘 · 端到端冒烟测试（Windows PowerShell 5.1+）
   覆盖与 scripts\smoke.sh 一致：健康检查 → 注册登录 → 建目录 → 分块上传(断点状态)
   → 列表 → 全量下载(sha256) → Range(206) → 预览签名/白名单 → 重命名/移动
@@ -175,7 +175,7 @@ try {
     Check ($r4.StatusCode -eq 404) '删除分享后 resolve 404'
     Invoke-Api DELETE "$Base/files/$fid" $null $token | Out-Null
     Invoke-Api DELETE "$Base/files/$dirId?recursive=true" $null $token | Out-Null
-    $ls2 = Invoke-Api GET "$Base/files?parent_id=null" $null $token
+    $ls2 = Invoke-Api GET "$Base/files" $null $token
     Check (($ls2.Content | ConvertFrom-Json).items.Count -eq 0) '删除后根目录为空'
 }
 finally {

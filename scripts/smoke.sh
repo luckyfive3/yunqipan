@@ -152,7 +152,7 @@ C404=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/shares/resolve" -H 
 assert_eq "删除分享后 resolve 404" "$C404" "404"
 curl -sf -X DELETE "$BASE/files/$FID" -H "$AUTH" >/dev/null
 curl -sf -X DELETE "$BASE/files/$DIRID?recursive=true" -H "$AUTH" >/dev/null
-LS2=$(curl -sf -X GET "$BASE/files?parent_id=null" -H "$AUTH")
+LS2=$(curl -sf -X GET "$BASE/files" -H "$AUTH")
 assert_eq "删除后根目录为空" "$(echo "$LS2" | jq -r '.items | length')" "0"
 
 echo ""
