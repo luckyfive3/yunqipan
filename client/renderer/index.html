@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; media-src http: https: blob:; frame-src http: https:; connect-src 'self'; font-src 'self' data:">
+  <title>云栖盘</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- 连接页（免登录模式：服务端不可达时的重试界面） -->
+  <div id="login-view" class="login-wrap hidden">
+    <div class="login-bg"></div>
+    <div class="login-card">
+      <div class="login-logo">☁</div>
+      <div class="login-title">云栖盘</div>
+      <div class="login-subtitle">安全 · 高速 · 属于你的私有云</div>
+      <div class="login-tip">本地单用户模式 · 打开即用，无需注册登录</div>
+      <div class="form-field">
+        <label>服务地址（留空 = 自动使用内置单机服务端）</label>
+        <input id="connect-server" type="text" placeholder="留空自动；远程服务端填 http://ip:端口">
+      </div>
+      <div id="connect-status" class="login-tip">未连接</div>
+      <button id="connect-retry" class="btn primary block" type="button">连接 / 重试</button>
+      <div class="login-tip">提示：服务端未启动时请先双击 start.bat；首次连接会自动创建本地账号并直接进入。</div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="app-view" class="app hidden">
+    <!-- 左侧导航 -->
+    <aside id="sidebar">
+      <div class="logo"><span class="logo-icon">☁</span>云栖盘</div>
+      <nav>
+        <button type="button" data-page="files" class="nav-item active"><span class="nav-ic">📁</span>文件</button>
+        <button type="button" data-page="transfers" class="nav-item"><span class="nav-ic">⬇</span>传输</button>
+        <button type="button" data-page="shares" class="nav-item"><span class="nav-ic">🔗</span>分享</button>
+        <button type="button" data-page="sync" class="nav-item"><span class="nav-ic">🔄</span>同步</button>
+        <button type="button" data-page="settings" class="nav-item"><span class="nav-ic">⚙</span>设置</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-line"><span class="user-dot"></span><span id="user-name">本地账号</span></div>
+      </div>
+    </aside>
+
+    <!-- 右侧主体 -->
+    <div class="main">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <div class="topbar-logo">☁ 云栖盘</div>
+        <div class="search-box">
+          <span class="search-ic">🔍</span>
+          <input id="file-search" type="text" placeholder="搜索当前目录中的文件">
+        </div>
+        <div class="topbar-right">
+          <button id="btn-upload" class="btn primary" type="button">⬆ 上传</button>
+          <button id="btn-theme" class="btn icon-btn" type="button" title="切换明暗主题">🌙</button>
+          <div class="avatar-wrap">
+            <button id="avatar-btn" class="avatar" type="button" title="账号菜单"><span id="avatar-letter">未</span></button>
+            <div id="user-menu" class="user-menu hidden">
+              <div class="menu-head">
+                <div class="menu-name" id="menu-user">本地账号</div>
+                <div class="menu-quota" id="menu-quota">配额：-</div>
+              </div>
+              <button class="menu-item" id="menu-theme" type="button">🌙 切换主题</button>
+              <button class="menu-item" id="menu-settings" type="button">⚙ 打开设置</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 页面内容 -->
+      <main id="main">
+        <!-- 文件页 -->
+        <section id="page-files" class="page">
+          <div class="toolbar">
+            <button id="btn-new-folder" class="btn" type="button">＋ 新建文件夹</button>
+            <button id="btn-refresh" class="btn" type="button">⟳ 刷新</button>
+            <div class="parse-box">
+              <input id="parse-input" type="text" placeholder="粘贴分享链接（云栖盘 /s/ 链接或 http(s) 直链）">
+              <button id="btn-parse" class="btn primary" type="button">解析</button>
+            </div>
+          </div>
+          <div id="batch-bar" class="batch-bar hidden">
+            <span>已选 <b id="batch-count">0</b> 项</span>
+            <button id="btn-batch-download" class="btn small" type="button">批量下载</button>
+            <button id="btn-batch-delete" class="btn small danger" type="button">批量删除</button>
+            <button id="btn-batch-clear" class="btn small ghost" type="button">取消选择</button>
+          </div>
+          <div id="breadcrumb" class="breadcrumb"></div>
+          <div id="file-list" class="file-list card">
+            <div class="file-list-head">
+              <span class="col-check"></span><span class="col-name">名称</span>
+              <span class="col-size">大小</span><span class="col-time">修改时间</span><span class="col-actions">操作</span>
+            </div>
+            <div id="file-rows"></div>
+          </div>
+        </section>
+
+        <!-- 传输页 -->
+        <section id="page-transfers" class="page hidden">
+          <div class="toolbar">
+            <div class="page-title">传输列表</div>
+            <button id="btn-pause-all" class="btn" type="button">⏸ 全部暂停</button>
+            <button id="btn-resume-all" class="btn" type="button">▶ 全部继续</button>
+            <button id="btn-clear-finished" class="btn" type="button">🗑 清空已完成</button>
+          </div>
+          <div id="transfer-list" class="card transfer-card"></div>
+        </section>
+
+        <!-- 分享页 -->
+        <section id="page-shares" class="page hidden">
+          <div class="toolbar">
+            <div class="page-title">我的分享</div>
+            <button id="btn-new-share" class="btn primary" type="button">＋ 新建分享</button>
+            <button id="btn-share-refresh" class="btn" type="button">⟳ 刷新</button>
+          </div>
+          <div id="share-list" class="card"></div>
+        </section>
+
+        <!-- 同步页 -->
+        <section id="page-sync" class="page hidden">
+          <div class="toolbar">
+            <div class="page-title">本地同步</div>
+          </div>
+          <div class="card sync-card">
+            <div class="form-row">
+              <div class="form-field">
+                <label>本地同步目录</label>
+                <div class="input-with-btn">
+                  <input id="sync-local-root" type="text" placeholder="选择要同步的本地文件夹" readonly>
+                  <button id="btn-sync-pick" class="btn" type="button">选择…</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>同步模式</label>
+                <select id="sync-mode">
+                  <option value="twoway">双向同步</option>
+                  <option value="up">仅上传（本地 → 云端）</option>
+                  <option value="down">仅下载（云端 → 本地）</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>远端扫描间隔（秒）</label>
+                <input id="sync-interval" type="number" min="5" value="30">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>排除规则（逗号分隔，支持 * 通配符）</label>
+                <input id="sync-exclude" type="text" placeholder="*.tmp, cache/*, node_modules">
+              </div>
+            </div>
+            <div class="form-row">
+              <button id="btn-sync-toggle" class="btn primary" type="button">▶ 启动同步</button>
+              <button id="btn-sync-now" class="btn" type="button">⟳ 立即扫描</button>
+              <span id="sync-status" class="sync-status">未运行</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">最近事件</div>
+            <div id="sync-events" class="sync-events"><div class="empty">暂无事件</div></div>
+          </div>
+        </section>
+
+        <!-- 设置页 -->
+        <section id="page-settings" class="page hidden">
+          <div class="toolbar">
+            <div class="page-title">设置</div>
+          </div>
+          <div class="card">
+            <div class="card-title">通用</div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>下载目录</label>
+                <div class="input-with-btn">
+                  <input id="set-download-dir" type="text" readonly>
+                  <button id="btn-pick-download-dir" class="btn" type="button">选择…</button>
+                </div>
+              </div>
+              <div class="form-field">
+                <label>缓存目录</label>
+                <input id="set-cache-dir" type="text" readonly title="由程序管理，存放 aria2 缓存与临时文件">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>主题</label>
+                <select id="set-theme">
+                  <option value="light">浅色</option>
+                  <option value="dark">深色</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">传输</div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>同时上传任务数</label>
+                <input id="set-max-upload" type="number" min="1" max="16" value="3">
+              </div>
+              <div class="form-field">
+                <label>同时下载任务数</label>
+                <input id="set-max-download" type="number" min="1" max="16" value="3">
+              </div>
+              <div class="form-field">
+                <label>单文件下载线程数（1-32）</label>
+                <input id="set-threads" type="number" min="1" max="32" value="8">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>下载限速（KB/s，0=不限）</label>
+                <input id="set-limit-down" type="number" min="0" value="0">
+              </div>
+              <div class="form-field">
+                <label>上传限速（KB/s，0=不限）</label>
+                <input id="set-limit-up" type="number" min="0" value="0">
+              </div>
+              <div class="form-field">
+                <label>上传分块大小（MiB，5-64）</label>
+                <input id="set-chunk" type="number" min="5" max="64" value="8">
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">加速内核（可选）</div>
+            <div class="form-row">
+              <div class="form-field check-field">
+                <label><input id="set-aria2" type="checkbox"> 启用 aria2 下载加速</label>
+                <div class="hint">可选加速内核；关闭后使用自研多线程内核。需本机安装 aria2c。</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>aria2c 可执行文件路径（留空则使用 PATH）</label>
+                <input id="set-aria2-path" type="text" placeholder="如 C:\aria2\aria2c.exe">
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">链接解析器</div>
+            <div class="form-row">
+              <div class="form-field check-field">
+                <label><input id="set-parser-baidu" type="checkbox"> 百度网盘公开分享解析</label>
+              </div>
+              <div class="form-field check-field">
+                <label><input id="set-parser-quark" type="checkbox"> 夸克网盘公开分享解析</label>
+              </div>
+            </div>
+            <div class="hint warn-hint">合规提示：解析器默认关闭，仅处理匿名可见的公开分享，不实现任何逆向签名、不使用账号 Cookie；开启即表示你自行承担平台条款责任。关闭后私有云盘全部功能不受影响。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">端到端加密（E2E）</div>
+            <div class="form-row">
+              <div class="form-field check-field">
+                <label><input id="set-e2e" type="checkbox"> 新上传文件默认加密（AES-256-GCM）</label>
+                <div class="hint">加密文件不参与服务端预览；解密需要本客户端与口令。</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>加密口令</label>
+                <input id="set-e2e-pass" type="password" placeholder="默认口令 yunqipan">
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">账号</div>
+            <div class="form-row">
+              <span class="hint" style="align-self:center">本地单用户免登录模式：首次打开自动创建本地账号；账号凭据保存在本地配置中。</span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- 底部状态栏 -->
+      <footer class="statusbar">
+        <div class="status-quota">
+          <span id="quota-text">配额：-</span>
+          <div class="quota-track"><div id="quota-fill" class="quota-fill"></div></div>
+        </div>
+        <div id="global-summary" class="status-summary" title="点击查看传输列表">
+          <span>↓ <b id="sum-down">0 B/s</b></span>
+          <span>↑ <b id="sum-up">0 B/s</b></span>
+          <span>进行中 <b id="sum-running">0</b></span>
+          <span>排队 <b id="sum-queued">0</b></span>
+          <span>已完成 <b id="sum-done">0</b></span>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 弹层与提示容器 -->
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/files.js"></script>
+  <script src="js/preview.js"></script>
+  <script src="js/transfers.js"></script>
+  <script src="js/shares.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/parse.js"></script>
+  <!-- CSP 禁止内联脚本，引导逻辑放在独立文件中，保证所有命名空间挂载完成后再启动 -->
+  <script src="js/init.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+{
+  "name": "yunqipan-client",
+  "productName": "云栖盘",
+  "version": "1.0.0",
+  "description": "云栖盘桌面客户端（Windows 10+ / macOS 12+，零构建、零运行时依赖）",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node scripts/selftest.js && node scripts/selftest-download.js && node scripts/selftest-upload.js && node scripts/selftest-queue.js",
+    "postinstall": "node scripts/ensure-electron.js",
+    "bundle:server": "node scripts/bundle-server.js",
+    "predist:win": "node scripts/bundle-server.js",
+    "predist:mac": "node scripts/bundle-server.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "private": true,
+  "author": "yunqipan",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.yunqipan.client",
+    "productName": "云栖盘",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/server",
+        "to": "server"
+      },
+      {
+        "from": "resources/launcher.cmd",
+        "to": "launcher.cmd"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "yunqipan-${version}-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "云栖盘",
+      "perMachine": false,
+      "include": "build/installer.nsh"
+    },
+    "portable": {
+      "artifactName": "yunqipan-${version}-portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "artifactName": "yunqipan-${version}-${arch}.${ext}"
+    }
+  }
+}

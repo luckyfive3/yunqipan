@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  # ───────────────────────────── 服务端：格式 / vet / 单测 / 构建 ─────────────────────────────
+  server-test:
+    name: 服务端 · 构建与单元测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: server/go.sum
+      - name: gofmt 格式检查
+        run: test -z "$(gofmt -l ./cmd ./internal ./migrations)"
+      - name: go vet
+        run: go vet ./...
+      - name: go test（单元测试）
+        run: go test ./... -count=1 -v
+      - name: go build
+        run: go build -o bin/server ./cmd/server
+
+  # ───────────────────────────── 服务端：端到端冒烟（真实 PG/Redis/MinIO）─────────────────────────────
+  server-e2e:
+    name: 服务端 · 端到端冒烟
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wangpan
+          POSTGRES_PASSWORD: wangpan
+          POSTGRES_DB: wangpan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wangpan -d wangpan"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      s3mock:
+        image: adobe/s3mock:3.11.0
+        env:
+          initialBuckets: wangpan
+        ports:
+          - 9090:9090
+        options: >-
+          --health-cmd "curl -s -o /dev/null http://localhost:9090/ || exit 1"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: server/go.sum
+      - name: 编译服务端
+        run: cd server && go build -o bin/server ./cmd/server
+      - name: 启动服务端
+        run: |
+          cd server
+          DATABASE_URL='postgres://wangpan:wangpan@localhost:5432/wangpan?sslmode=disable' \
+          MINIO_ENDPOINT='127.0.0.1:9090' MINIO_ACCESS_KEY='minioadmin' MINIO_SECRET_KEY='minioadmin' \
+          MINIO_BUCKET='wangpan' MINIO_USE_SSL='false' REDIS_URL='redis://localhost:6379/0' \
+          JWT_SECRET='ci-jwt-secret' PREVIEW_TOKEN_SECRET='ci-preview-secret' DEFAULT_QUOTA_GB='1' \
+          ./bin/server > /tmp/wp-server.log 2>&1 &
+          echo $! > /tmp/wp-server.pid
+      - name: 端到端冒烟测试
+        run: SERVER_URL=http://127.0.0.1:8080 bash scripts/smoke.sh
+      - name: 服务端日志（失败时排查）
+        if: failure()
+        run: cat /tmp/wp-server.log
+
+  # ───────────────────────────── 客户端：语法检查 + 功能自测（纯 Node，无需安装 electron）─────────────────────────────
+  client-test:
+    name: 客户端 · 语法检查与功能自测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 全部 JS 语法检查
+        run: |
+          cd client
+          find electron renderer scripts -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: npm test（下载内核/上传契约/队列/加密 功能自测）
+        run: cd client && npm test
+
+  # ───────────────────────────── 打包：打 tag（v*）时产出双平台安装包 ─────────────────────────────
+  package:
+    name: 打包 · ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [server-test, server-e2e, client-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: npm run dist:win
+            artifact: yunqipan-windows
+          - os: macos-latest
+            script: npm run dist:mac
+            artifact: yunqipan-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 安装依赖
+        run: cd client && npm install --no-audit --no-fund
+      - name: 构建安装包（未签名）
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: cd client && ${{ matrix.script }} --publish never
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            client/dist/*.exe
+            client/dist/*.dmg
+            client/dist/*.zip
+          if-no-files-found: error
